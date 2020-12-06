@@ -6,62 +6,55 @@ import os
 import math
 
 
-helpme = """
-X-Ray Tools python package
-
-A compilation of python scripts for facilitating X-ray analysis of stars.
-Author: Jorge Fernandez, University of Warwick, Coventry, UK
-
-Functions:
-rotlaw 		:plots Wright et al 2011 model for Rossby number vs X-ray/bolometric ratio.
-agerel 		:plots Jackson et al 2012 model for colour index vs X-ray/bolometric ratio vs age.
-xraydiv 	:finds the soft/hard x-ray divide of a star's X-ray spectrum.
-lcratio 	:plots the ratio between the soft and hard X-ray light curves.
-cumlc 		:plots a cumulative light curve.
-
-"""
-
-
-def rotlaw(star_lratio=0, star_rot=0, star_rossby=0):
+def rotlaw(star_lratio=0, star_rossby=0, star_rot=0, vkcolor=None):
 	"""
 	This function plots a star's rotation period and X-ray luminosity
 	versus bolumetric luminosity ratio along with a model by Wright et al 2011
 	(https://ui.adsabs.harvard.edu/abs/2011ApJ...743...48W/abstract)
 
 	Args:
-		star_lratio:	(float) X-ray luminosity - bolumetric luminosity ratio.
+		star_lratio:	(float) X-ray / bolumetric luminositiy ratio.
 		star_rot:   	(float) Star's rotation period in days.
-		star_rossby: 	(float) Star's Rossby number (rotation period/turnover time)
+		star_rossby: 	(float) Star's Rossby number (rotation period / turnover time)
+		vkcolor:     	(float) Star's V-Ks colour index.
 
 	The luminosity ratio is always required.
-	Then, either the star rotation or the Rossby number need to be defined.
-	If the Rossby number is defined, the star is fit to the Rossby number-based model.
-	On the other hand, if only the rotation period is defined, the star is plotted
-	on the less accurate rotation period model, and it's expected Rossby number and
-	convective turnover time based on the model are printed.
-	Finally, if both are defined, the Rossby number takes preference.
+	If the Rossby number is defined, the plot can be generated straight away.
+	Otherwise, you will need to input both the star's rotation period in days as well
+	as its V - Ks colour index.
 	"""
 
 	# Input checking
 	includes_rossby = True
-
-	if(star_lratio == 0):
-		print("[ROTLAW] Error: Lx/Lbol undefined.")
+	# The luminosity ratio is always required
+	if(star_lratio <= 0):
+		print("[ROTLAW] Error: Lx/Lbol is invalid or undefined.")
 		return
-	if(star_rot == 0 and star_rossby == 0):
-		print("[ROTLAW] Error: rotation period and Rossby number undefined.")
-		return
-	# Cannot retrieve or calculate Rossby number. Estimate from model.
-	if(star_rot != 0 and star_rossby == 0):
-		print("[ROTLAW] Warning: no Rossby number provided.")
+	# Decide to use either Rossby number or estimate it.
+	if(star_rossby <= 0):
 		includes_rossby = False
+		if(star_rot <= 0 or vkcolor is None):
+			print( ("[ROTLAW] Error: undefined parameters.\n"
+				"Either Rossby number or both rotation period and V-Ks color required.") )
+			return
+		else:
+			print("[ROTLAW] No Rossby number defined. Value will be estimated.")
 
-	"""
-	Defining model parameters:
-			 { rx_sat 				(for Rx < ro_sat) 
-		Rx = {
-			 { C * Ro^(powerlaw) 	(for Rx >= ro_sat) 
-	"""
+	# Estimating turnover time and Rossby number, if undefined
+	if(includes_rossby == False):
+		turnover_time = 0
+		# Check if colour is within valid range
+		if(vkcolor < 1.1 or vkcolor > 6.6):
+			print("[ROTLAW] Warning: V-Ks colour index outside valid range (1.1, 6.6)")
+		if(vkcolor < 3.5):
+			turnover_time = 10**(0.73 + 0.22*vkcolor) #days
+			star_rossby = star_rot / turnover_time
+		else:
+			turnover_time = 10**(-2.16 + 1.5*vkcolor - 0.13*vkcolor**2)
+		print(f" Estimated turnover time: {turnover_time:.3f} days")
+		print(f" Estimated Rossby number: {star_rossby:.3f}")
+
+	# Model parameters
 	powerlaw = -2.7
 	pwl_err = 0.16
 	ro_sat = 0.13	# Saturation Rossby number
@@ -69,23 +62,12 @@ def rotlaw(star_lratio=0, star_rot=0, star_rossby=0):
 	rx_sat = 10**(-3.13)
 	rx_sat_err = 0.08	# Saturation luminosity ratio (log10)
 
-	# Rossby number v Rx model
-	ro_init = 0.001
-	ro_end = 10
-	ro_points = 1000
-	ro = np.linspace(ro_init, ro_end, ro_points)
-
-	# Rotaton period v Rx model
-	rot_init = 0.1
-	rot_end = 100
-	rot_points = 1000
-	rot = np.linspace(rot_init, rot_end, rot_points)
-	rot_sat = 5 #days
-
+	# Rossby number points for plotting
+	ross = np.linspace(0.001, 10, 1000)
 
 	# Building Rossby number model
 	const = rx_sat / (ro_sat**powerlaw)
-	model = np.array([const*r**powerlaw if r>ro_sat else rx_sat for r in ro])
+	model = np.array([const*r**powerlaw if r>ro_sat else rx_sat for r in ross])
 
 	rx_sat_uerr = rx_sat*10**rx_sat_err
 	rx_sat_lerr = rx_sat/10**rx_sat_err
@@ -94,35 +76,15 @@ def rotlaw(star_lratio=0, star_rot=0, star_rossby=0):
 
 	const_uerr = (rx_sat_uerr) / (ro_sat_uerr**(powerlaw+pwl_err))
 	const_lerr = (rx_sat_lerr) / (ro_sat_lerr**(powerlaw-pwl_err))
-	model_uerr = np.array([const_uerr*r**(powerlaw+pwl_err) if r>ro_sat_uerr else rx_sat_uerr for r in ro])
-	model_lerr = np.array([const_lerr*r**(powerlaw-pwl_err) if r>ro_sat_lerr else rx_sat_lerr for r in ro])
-
-	# Building Rotation period model
-	const_rot = rx_sat / rot_sat**powerlaw
-	model_rot = np.array([const_rot*r**powerlaw if r>rot_sat else rx_sat for r in rot])
-	model_rot_uerr = np.array([const_rot*r**(powerlaw+pwl_err) if r>rot_sat else rx_sat for r in rot])
-	model_rot_lerr = np.array([const_rot*r**(powerlaw-pwl_err) if r>rot_sat else rx_sat for r in rot])
-
-	# Expected Rossby number and turnover time for the star based on the model.
-	if(includes_rossby == False):
-		expected_rossby = (star_lratio/const) ** (1/powerlaw)
-		exp_ross_err = np.sqrt( (np.abs(const-const_uerr))**2*(expected_rossby/powerlaw/const)**2 + (pwl_err)**2*(expected_rossby*np.log(star_lratio/const)/powerlaw**2)**2 )
-		expected_conv = star_rot/expected_rossby
-		exp_conv_err = exp_ross_err * star_rot / expected_rossby**2
-		print(f" Model fits:\n   Rossby number: {expected_rossby:.3f}+/-{exp_ross_err:.3f}\n   Turnover time: {expected_conv:.3f}+/-{exp_conv_err:.3f} days")
+	model_uerr = np.array([const_uerr*r**(powerlaw+pwl_err) if r>ro_sat_uerr else rx_sat_uerr for r in ross])
+	model_lerr = np.array([const_lerr*r**(powerlaw-pwl_err) if r>ro_sat_lerr else rx_sat_lerr for r in ross])
 
 	#Plotting model & star
-	if(includes_rossby == True):
-		plt.plot(ro, model, 'b-')
-		plt.plot(ro, model_uerr, 'b--', ro, model_lerr, 'b--')
-		plt.plot(star_rossby, star_lratio, 'r*')
-		plt.xlabel("Rossby number")
-		plt.title("Rotation Law by Wright et al (2011)\n$R_x = (%.2E) Ro^{%.2f\\pm %.2f}$" % (const, powerlaw, pwl_err) )
-	else:
-		plt.plot(rot, model_rot, 'b--')
-		plt.plot(star_rot, star_lratio, 'r*')
-		plt.xlabel("Rotation period (days)")
-		plt.title("Rotation Law by Wright et al (2011)\n$R_x = (%.2E) P_{rot}^{%.2f\\pm %.2f}$" % (const_rot, powerlaw, pwl_err) )
+	plt.plot(ross, model, 'b-')
+	plt.plot(ross, model_uerr, 'b--', ross, model_lerr, 'b--')
+	plt.plot(star_rossby, star_lratio, 'r*')
+	plt.xlabel("Rossby number")
+	plt.title("Rotation Law by Wright et al (2011)\n$R_x = (%.2E) Ro^{%.2f\\pm %.2f}$" % (const, powerlaw, pwl_err) )
 
 	# Plot decorations
 	plt.ylabel("$L_x / L_{bol}$")
@@ -186,36 +148,55 @@ def agerel(star_lum=None, star_color=None, star_age=None):
 	# Fit and plot
 	satlum = model_data['satlum'][ind]
 	satage = model_data['satage'][ind]
-	powerlaw = model_data['powerlaw'][ind]
+	# It only looks like the plots in the paper by doubling the pw index! Why??
+	powerlaw = model_data['powerlaw'][ind]*2
 
 	ages = np.linspace(6.5, 10, 1000)
 	const = satlum / (satage**powerlaw)
-	model = np.array([const*(a**powerlaw) if a>satage else satlum for a in ages])
+	model = np.array([const*a**(powerlaw) if a>satage else satlum for a in ages])
 
-	plt.plot(ages, model, 'b.-')
+	plt.plot(ages, model, 'b-')
 	plt.plot(star_age+6, np.log10(star_lum), 'r*')
 
 	plt.xlabel("Age log10(yr)")
 	plt.ylabel("$log10(L_x / L_{bol})$")
 	plt.title("Age relation by Jackson et al (2012)\n%.2f < (B-V) < %.2f" % (model_data['icolor'][ind], model_data['fcolor'][ind]))
 	plt.show()
+	plt.clf()
+
+	# Plots all models together
+	"""
+	for m in model_data:
+		satlum = m['satlum']
+		satage = m['satage']
+		powerlaw = m['powerlaw']*2
+		ages = np.linspace(6.5, 10, 1000)
+		const = satlum / (satage**powerlaw)
+		model = np.array([const*a**(powerlaw) if a>satage else satlum for a in ages])
+		plt.plot(ages, model, 'b-')
+	plt.show()
+	"""
+
+
 	
 
 
 
-def xraydiv(file=None, rmf=None, verbose=False):
+def xraydiv(file=None, rmf=None, erange=None, verbose=False):
 	"""
 	This function extracts spectrum data from a star and calculates the energy
 	boundary between soft and hard X-rays (energy at which 50% of the counts are
 	on the left, and the remaining 50% on the right).
 
 	Args:
-		file:	fits filename where the spectrum data is stored.
-		rmf:	response fits file of the star.
+		file:	(string) file where the spectrum data is stored.
+		rmf:	(string) RMF response file of the star.
+		erange:	(float,float) (optional) Range of energies to include in plot (keV)
+		verbose: (bool) (optional) Plots the spectrum with the energy divide.
 
 	Returns:
-		div:	Energy boundary between soft and hard X-rays in keV.
-		None: 	If necessary input arguments are missing.
+		[0] 	(float) Energy boundary between soft and hard X-rays in keV.
+		[0] 	(None) If necessary input arguments are missing.
 	"""
 	if(not file or not rmf):
 		print("[XRAYDIV] Error: spectrum or rmf filenames undefined")
@@ -230,18 +211,31 @@ def xraydiv(file=None, rmf=None, verbose=False):
 
 	data = None
 	channel_data = None
+	exptime = 0	#Exposure time in seconds
 	with fits.open(file) as image:
 		data = np.copy(image['SPECTRUM'].data)
+		# Calculating total exposure time in seconds
+		import re
+		"""This splits a date string from the header (e.g. "2018-12-5T16:28:33")
+		into a list of ints (2018, 12, 5, 16, 28, 33) using a regular expression
+		on the separators: dash, space, T, and semicolon.
+		Then, the delta time is calculated using the datetime module.
+		"""
+		expstart = filter(None, re.split("[T \-:]+", image[0].header['EXPSTART']))
+		expstop = filter(None, re.split("[T \-:]+", image[0].header['EXPSTOP']))
+		from datetime import datetime
+		exptime = (datetime(*map(int,expstop)) - datetime(*map(int,expstart))).total_seconds()
 
 	with fits.open(rmf) as rmf_data:
 		channel_data = np.copy(rmf_data['EBOUNDS'].data)
 
 	# Calculating middle point between soft and hard X-rays.
 	total_counts = data['COUNTS'].sum()
-	print(f"Total counts = {total_counts}")
+	if(verbose):
+		print(f"[XRAYDIV] Total counts = {total_counts}")
+		print(f"[XRAYDIV] Exposure time: {exptime} s")
 
 	energies = (channel_data['E_MAX'] + channel_data['E_MIN'])/2.0
-	energy_err = channel_data['E_MAX'] - channel_data['E_MIN']
 
 	cmcounts = 0
 	middle_energy = 0
@@ -251,13 +245,14 @@ def xraydiv(file=None, rmf=None, verbose=False):
 			middle_energy = energies[i]
 			break
 
-	print(f"Soft/hard X-rays boundary is at {middle_energy:.3f} keV")
+	print(f"[XRAYDIV] Soft/hard X-rays boundary is at {middle_energy:.3f} keV")
 
 	if(verbose == False):
 		return middle_energy
 
 	counts_binned = []
 	energies_binned = []
+	energy_per_bin = []
 
 	# Get indices of where bins begin, ignoring bad channels
 	bin_ind = [ i for i,g in enumerate(data['GROUPING']) if(data['QUALITY'][i] != 1 and g == 1) ]
@@ -266,42 +261,50 @@ def xraydiv(file=None, rmf=None, verbose=False):
 		total = data['COUNTS'][bin_ind[i]:bin_ind[i+1]].sum()
 		counts_binned.append( total )
 		energies_binned.append( energies[bin_ind[i]:bin_ind[i+1]].mean() )
+		energy_per_bin.append( np.abs(energies[bin_ind[i]] - energies[bin_ind[i+1]]) )
 
 	# Normalizing counts
-	counts_binned = [d/total_counts/energies_binned[i] for i,d in enumerate(counts_binned)]
+	counts_binned = [d/total_counts/exptime/energy_per_bin[i] for i,d in enumerate(counts_binned)]
 
-	# Index at which energies are greater than 2 keV
-	stop_ind = [i for i,d in enumerate(counts_binned) if energies_binned[i] >= 2 ][0]
+	# Plot only energy in defined range
+	start_ind = 0
+	stop_ind = len(counts_binned)
+	if(erange is not None and isinstance(erange,(tuple, list)) ):
+		start_ind_lst = [i for i,d in enumerate(counts_binned) if energies_binned[i] >= erange[0] ]
+		stop_ind_lst = [i for i,d in enumerate(counts_binned) if energies_binned[i] >= erange[1] ]
+		if(len(start_ind_lst) > 0):
+			start_ind = start_ind_lst[0]
+		if(len(stop_ind_lst) > 0):
+			stop_ind = stop_ind_lst[0]
 
 
-	plt.plot(energies_binned[0:stop_ind], counts_binned[0:stop_ind], 'g.--', markersize=1)
+	plt.step(energies_binned[start_ind:stop_ind], counts_binned[start_ind:stop_ind], color='k', linewidth=1)
 	plt.title(f" Spectrum\n {file}")
 	plt.xlabel("Energy (keV)")
-	plt.ylabel("Normalized counts  keV$^{-1}$")
+	plt.ylabel("Normalized counts s$^{-1}$ keV$^{-1}$")
 	plt.axvline(x=middle_energy, color='red', linestyle='-', linewidth=1)
 	plt.text(middle_energy*1.01,max(counts_binned)*0.9,f'{middle_energy:.2f} keV',rotation=0)
 	plt.show()
 	plt.clf()
 
+	return middle_energy
 
 
 
 
-def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False, cumlc=False):
+
+def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False, extra=False):
 	"""
 	Generates and plots a ratio between the soft and hard X-ray
 	light curves.
 
 	Args:
-		fhardx   	Light curve data file of hard xrays.
-		fsoftx    	Light curve data file of soft xrays.
-		softrange	(optional) List of two floats, soft xrays energy range in keV.
-					For plotting purposes.
-		hardrange	(optional) List of two floats, hard xrays energy range in keV.
-					For plotting purposes.
-		rlog		(optional) If true, plots the soft/hard x-ray ratio lightcurve
-					in a log10 scale.
-		cumlc 		(optional) Plots cumulative lightcurves of soft and hard xray lightcurves
+		fhardx   	(string) Light curve data file of hard xrays.
+		fsoftx    	(string) Light curve data file of soft xrays.
+		softrange	(optional) (float, float) Soft xrays energy range in keV. For plotting purposes.
+		hardrange	(optional) (float, float) Hard xrays energy range in keV. For plotting purposes.
+		rlog		(optional) (bool) If true, plots the soft/hard x-ray ratio lightcurve in a log10 scale.
+		extra		(optional) (bool) Plots cumulative lightcurves as well as hard-soft difference.
 
 	"""
 	# Input checking
@@ -385,16 +388,14 @@ def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False
 			[f"Soft X-rays ({softrange[0]}-{softrange[1]} keV)",
 			 f"Hard X-rays ({hardrange[0]}-{hardrange[1]} keV)"])
 	else:
-		fig.legend([softx_plot,hardx_plot] ,
-			['Soft X-rays','Hard X-rays'])
+		fig.legend([softx_plot,hardx_plot],['Soft X-rays','Hard X-rays'])
 	
 	plt.show()
 	plt.clf()
 
-	if(not cumlc):
+	if(not extra):
 		return
 	# Plotting cumulative lightcurves
-	plt.clf()
 	scumul = np.cumsum(s_energies)
 	hcumul = np.cumsum(h_energies)
 	plt.plot(s_times, scumul, 'b-', s_times, hcumul, 'r-', s_times, scumul/hcumul, 'g-')
@@ -402,22 +403,24 @@ def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False
 	plt.xlabel("Time (s)")
 	plt.ylabel("Cumulative rate (counts / s)")
 	plt.show()
+	plt.clf()
+
+	# Plotting subtracted lightcurve Hard - Soft
+	plt.plot(s_times, h_energies-s_energies, 'b-')
+	plt.title(f" Hard - Soft X-ray lightcurve")
+	plt.xlabel("Time (s)")
+	plt.ylabel("Counts / s")
+	plt.show()
+
 	
-	
-
-
-
-
-
-
 
 def cumlc(lcfile=None, plotlc=True):
 	"""
 	Generates and plots a cumulative light curve.
 
 	Args:
-		lcfile: 	fits file with lightcurve data
-		plotlc:		(optional) Plots original lightcurve
+		lcfile: 	(string) fits file with lightcurve data
+		plotlc:		(optional) (bool) Plots original lightcurve
 
 	"""
 	if(not lcfile):
@@ -438,7 +441,7 @@ def cumlc(lcfile=None, plotlc=True):
 	energy_err = np.nan_to_num(lc_data['ERROR'], 0)
 
 	# Plotting normal lightcurve
-	if(plotlc):
+	if(isinstance(plotlc, bool) and plotlc):
 		plt.plot(times, energies)
 		plt.title(f" Counts plot across time \n {lcfile}")
 		plt.xlabel("Time (s)")
