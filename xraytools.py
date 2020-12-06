@@ -6,6 +6,34 @@ import os
 import math
 
 
+"""
+	----- X-ray Tools -----
+
+	For analysing stellar data in the X-ray regime.
+	
+	Author: Jorge Fernandez, University of Warwick, Coventry, UK
+	Date: 6th December 2020
+
+	Functions:
+		rotlaw
+			Calculates the star's Rossby number based on its rotation period,
+			and plots it along with a luminosity-ratio/rossby-number model by Wright et al 2011.
+
+		agerel
+			Fits the star to a luminosity-ratio/colour-index/age model by Jackson et al 2012.
+
+		xraydiv
+			Calculates the energy boundary between soft and hard X-rays.
+
+		lcratio
+			Plots the ratio between soft and hard light curves.
+
+		cumlc
+			Plots a cumulative light curve
+
+"""
+
+
 def rotlaw(star_lratio=0, star_rossby=0, star_rot=0, vkcolor=None):
 	"""
 	This function plots a star's rotation period and X-ray luminosity
