@@ -174,16 +174,16 @@ def agerel(star_lum=None, star_color=None, star_age=None):
 		return
 	
 	# Fit and plot
-	satlum = model_data['satlum'][ind]
-	satage = model_data['satage'][ind]
+	satlum = 10**model_data['satlum'][ind]
+	satage = 10**model_data['satage'][ind]
 	# It only looks like the plots in the paper by doubling the pw index! Why??
-	powerlaw = model_data['powerlaw'][ind]*2
+	powerlaw = model_data['powerlaw'][ind]
 
-	ages = np.linspace(6.5, 10, 1000)
-	const = satlum / (satage**powerlaw)
-	model = np.array([const*a**(powerlaw) if a>satage else satlum for a in ages])
+	ages = np.linspace(10**6.5, 10**10, 1000)
+	const = satlum / (satage**(-powerlaw))
+	model = np.array([const*a**(-powerlaw) if a>satage else satlum for a in ages])
 
-	plt.plot(ages, model, 'b-')
+	plt.plot(np.log10(ages), np.log10(model), 'b-')
 	plt.plot(star_age+6, np.log10(star_lum), 'r*')
 
 	plt.xlabel("Age log10(yr)")
@@ -191,19 +191,6 @@ def agerel(star_lum=None, star_color=None, star_age=None):
 	plt.title("Age relation by Jackson et al (2012)\n%.2f < (B-V) < %.2f" % (model_data['icolor'][ind], model_data['fcolor'][ind]))
 	plt.show()
 	plt.clf()
-
-	# Plots all models together
-	"""
-	for m in model_data:
-		satlum = m['satlum']
-		satage = m['satage']
-		powerlaw = m['powerlaw']*2
-		ages = np.linspace(6.5, 10, 1000)
-		const = satlum / (satage**powerlaw)
-		model = np.array([const*a**(powerlaw) if a>satage else satlum for a in ages])
-		plt.plot(ages, model, 'b-')
-	plt.show()
-	"""
 
 
 	
@@ -247,7 +234,6 @@ def xraydiv(file=None, rmf=None, erange=None, verbose=False):
 		"""This splits a date string from the header (e.g. "2018-12-5T16:28:33")
 		into a list of ints (2018, 12, 5, 16, 28, 33) using a regular expression
 		on the separators: dash, space, T, and semicolon.
-		Then, the delta time is calculated using the datetime module.
 		"""
 		expstart = filter(None, re.split("[T \-:]+", image[0].header['EXPSTART']))
 		expstop = filter(None, re.split("[T \-:]+", image[0].header['EXPSTOP']))
@@ -319,6 +305,15 @@ def xraydiv(file=None, rmf=None, erange=None, verbose=False):
 
 
 
+# Generates errorbars based on input array of data
+# as half the spacing between each two data points
+def _get_timebin_errors(data):
+	right_err = [ np.abs(data[i]-data[i+1])/2 for i in range(len(data)-1)]
+	left_err = [ np.abs(data[i]-data[i-1])/2 for i in range(1,len(data))]
+	right_err.insert(-1, left_err[-1])
+	left_err.insert(0, right_err[0])
+	return [left_err, right_err]
+
 
 
 def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False, extra=False):
@@ -327,8 +322,8 @@ def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False
 	light curves.
 
 	Args:
-		fhardx   	(string) Light curve data file of hard xrays.
 		fsoftx    	(string) Light curve data file of soft xrays.
+		fhardx   	(string) Light curve data file of hard xrays.
 		softrange	(optional) (float, float) Soft xrays energy range in keV. For plotting purposes.
 		hardrange	(optional) (float, float) Hard xrays energy range in keV. For plotting purposes.
 		rlog		(optional) (bool) If true, plots the soft/hard x-ray ratio lightcurve in a log10 scale.
@@ -368,7 +363,10 @@ def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False
 		print("[LCRATIO] Error: the input lightcurves don't have the same number of data points or time bins")
 		return
 
-	# Remove all NANs and values <= 0 from both light curves
+	# Time bin errors
+	tbinerr_raw = _get_timebin_errors(hardlc_data['TIME'])
+
+	# Gather indices where value is NAN or <= 0 from both light curves
 	rm_ind = []
 	for i in range(len(hardlc_data['TIME'])):
 		if(math.isnan(hardlc_data['TIME'][i]) or math.isnan(hardlc_data['RATE'][i])
@@ -377,18 +375,20 @@ def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False
 		if( hardlc_data['RATE'][i] <= 0 or softlc_data['RATE'][i] <= 0 ):
 			rm_ind.append(i)
 
-	print(f"[LCRATIO] Warning: {len(rm_ind)} invalid values removed")
-
+	# Remove bad data from collected indices
 	h_times_raw = np.delete(hardlc_data['TIME'], rm_ind)
 	h_energies = np.delete(hardlc_data['RATE'], rm_ind)
+	h_errors = np.delete(hardlc_data['ERROR'], rm_ind)
 	s_times_raw = np.delete(softlc_data['TIME'], rm_ind)
 	s_energies = np.delete(softlc_data['RATE'], rm_ind)
+	s_errors = np.delete(softlc_data['ERROR'], rm_ind)
+	tbinerr = [np.delete(tbinerr_raw[0], rm_ind), np.delete(tbinerr_raw[1], rm_ind)]
+	
+	print(f"[LCRATIO] Warning: {len(rm_ind)} invalid values removed")
 
+	# Calibrating time origin
 	s_times = s_times_raw - s_times_raw[0]
 	h_times = h_times_raw - h_times_raw[0]
-
-	s_energy_err = softlc_data['ERROR']
-	h_energy_err = hardlc_data['ERROR']
 
 	count_ratio = h_energies/s_energies
 
@@ -396,18 +396,20 @@ def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False
 	fig, axs = plt.subplots(2)
 
 	axs[0].set_title(" Soft and hard X-ray light-curves")
-	softx_plot, = axs[0].plot(s_times, s_energies, 'b-')
-	hardx_plot, = axs[0].plot(s_times, h_energies, 'r-')
+	softx_plot = axs[0].errorbar(s_times, s_energies, fmt='b.', xerr=tbinerr, yerr=s_errors)
+	hardx_plot = axs[0].errorbar(s_times, h_energies, fmt='r.', xerr=tbinerr, yerr=h_errors)
 	axs[0].set(ylabel = "Counts / s")
 
-	axs[1].set_title(" Soft / Hard ratio light curve")
+	axs[1].set_title(" Hard / Soft ratio light curve")
 	axs[1].set(xlabel = "Time (s)")
 	if(rlog):
-		ratio_plot, = axs[1].plot(s_times, np.log10(count_ratio), 'g-')
+		ratio_plot, = axs[1].plot(s_times, np.log10(count_ratio), 'g.')
 		axs[1].axhline(y=0, color='k', linestyle='--', linewidth=0.8)
 		axs[1].set(ylabel = "log10 $R_{hard}/R_{soft}$")
 	else:
-		ratio_plot, = axs[1].plot(s_times, count_ratio, 'g-')
+		ratio_err = [np.sqrt((h_errors[i]/s_energies[i])**2+(s_errors[i]*h_energies[i]/s_energies[i]**2)**2) for i in range(len(s_errors))]
+		print(ratio_err)
+		ratio_plot = axs[1].errorbar(s_times, count_ratio, fmt='g.', xerr=tbinerr, yerr=ratio_err)
 		axs[1].axhline(y=1, color='k', linestyle='--', linewidth=0.8)
 		axs[1].set(ylabel = "$R_{hard}/R_{soft}$")
 
@@ -426,7 +428,7 @@ def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False
 	# Plotting cumulative lightcurves
 	scumul = np.cumsum(s_energies)
 	hcumul = np.cumsum(h_energies)
-	plt.plot(s_times, scumul, 'b-', s_times, hcumul, 'r-', s_times, scumul/hcumul, 'g-')
+	plt.plot(s_times, scumul, 'b.', s_times, hcumul, 'r.', s_times, scumul/hcumul, 'g.')
 	plt.title(f" Cumulative counts plot across time")
 	plt.xlabel("Time (s)")
 	plt.ylabel("Cumulative rate (counts / s)")
@@ -434,7 +436,7 @@ def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False
 	plt.clf()
 
 	# Plotting subtracted lightcurve Hard - Soft
-	plt.plot(s_times, h_energies-s_energies, 'b-')
+	plt.plot(s_times, h_energies-s_energies, 'b.')
 	plt.title(f" Hard - Soft X-ray lightcurve")
 	plt.xlabel("Time (s)")
 	plt.ylabel("Counts / s")
