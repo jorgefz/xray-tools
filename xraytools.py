@@ -12,7 +12,7 @@ import math
 	For analysing stellar data in the X-ray regime.
 	
 	Author: Jorge Fernandez, University of Warwick, Coventry, UK
-	Date: 6th December 2020
+	Date: 16th December 2020
 
 	Functions:
 		rotlaw
@@ -197,7 +197,7 @@ def agerel(star_lum=None, star_color=None, star_age=None):
 
 
 
-def xraydiv(file=None, rmf=None, erange=None, verbose=False):
+def xraydiv(file=None, rmf=None, erange=None, verbose=True):
 	"""
 	This function extracts spectrum data from a star and calculates the energy
 	boundary between soft and hard X-rays (energy at which 50% of the counts are
@@ -207,7 +207,7 @@ def xraydiv(file=None, rmf=None, erange=None, verbose=False):
 		file:	(string) file where the spectrum data is stored.
 		rmf:	(string) RMF response file of the star.
 		erange:	(float,float) (optional) Range of energies to include in plot (keV)
-		verbose: (bool) (optional) Plots the spectrum with the energy divide.
+		verbose: (bool) (optional) Prints information and plots spectrum if true.
 
 	Returns:
 		[0] 	(float) Energy boundary between soft and hard X-rays in keV.
@@ -258,8 +258,8 @@ def xraydiv(file=None, rmf=None, erange=None, verbose=False):
 		if(cmcounts > total_counts/2):
 			middle_energy = energies[i]
 			break
-
-	print(f"[XRAYDIV] Soft/hard X-rays boundary is at {middle_energy:.3f} keV")
+	if verbose:
+		print(f"[XRAYDIV] Soft/hard X-rays boundary is at {middle_energy:.3f} keV")
 
 	if(verbose == False):
 		return middle_energy
@@ -278,7 +278,7 @@ def xraydiv(file=None, rmf=None, erange=None, verbose=False):
 		energy_per_bin.append( np.abs(energies[bin_ind[i]] - energies[bin_ind[i+1]]) )
 
 	# Normalizing counts
-	counts_binned = [d/total_counts/exptime/energy_per_bin[i] for i,d in enumerate(counts_binned)]
+	counts_binned = [d/exptime/energy_per_bin[i] for i,d in enumerate(counts_binned)]
 
 	# Plot only energy in defined range
 	start_ind = 0
@@ -291,23 +291,23 @@ def xraydiv(file=None, rmf=None, erange=None, verbose=False):
 		if(len(stop_ind_lst) > 0):
 			stop_ind = stop_ind_lst[0]
 
-
 	plt.step(energies_binned[start_ind:stop_ind], counts_binned[start_ind:stop_ind], color='k', linewidth=1)
-	plt.title(f" Spectrum\n {file}")
+	plt.title(f"X-Ray Spectrum\n {file}")
 	plt.xlabel("Energy (keV)")
 	plt.ylabel("Normalized counts s$^{-1}$ keV$^{-1}$")
 	plt.axvline(x=middle_energy, color='red', linestyle='-', linewidth=1)
 	plt.text(middle_energy*1.01,max(counts_binned)*0.9,f'{middle_energy:.2f} keV',rotation=0)
 	plt.show()
-	plt.clf()
 
 	return middle_energy
 
 
 
-# Generates errorbars based on input array of data
-# as half the spacing between each two data points
 def _get_timebin_errors(data):
+	"""
+	Generates error bars based on input array of data
+	as half the spacing between each two data points
+	"""
 	right_err = [ np.abs(data[i]-data[i+1])/2 for i in range(len(data)-1)]
 	left_err = [ np.abs(data[i]-data[i-1])/2 for i in range(1,len(data))]
 	right_err.insert(-1, left_err[-1])
@@ -349,7 +349,6 @@ def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False
 	if(isinstance(hardrange, (list,tuple) ) and len(hardrange)==2):
 		plot_hrange = True
 
-
 	softlc_data = None
 	hardlc_data = None
 	with fits.open(fhardx) as image:
@@ -388,58 +387,56 @@ def lcratio(fsoftx=None, fhardx=None, softrange=None, hardrange=None, rlog=False
 
 	# Calibrating time origin
 	s_times = s_times_raw - s_times_raw[0]
-	h_times = h_times_raw - h_times_raw[0]
 
 	count_ratio = h_energies/s_energies
 
 	# Plotting lightcurves and their ratio
-	fig, axs = plt.subplots(2)
 
-	axs[0].set_title(" Soft and hard X-ray light-curves")
+	legend_text = ["Soft X-rays" + plot_srange * f"({softrange[0]:.2f}-{softrange[1]:.2f} keV)",
+				   "Hard X-rays" + plot_hrange * f"({hardrange[0]:.2f}-{hardrange[1]:.2f} keV)"]
+
+	fig, axs = plt.subplots(nrows=2, ncols=1)
+
 	softx_plot = axs[0].errorbar(s_times, s_energies, fmt='b.', xerr=tbinerr, yerr=s_errors)
 	hardx_plot = axs[0].errorbar(s_times, h_energies, fmt='r.', xerr=tbinerr, yerr=h_errors)
-	axs[0].set(ylabel = "Counts / s")
-
+	axs[0].set_title(" Soft and hard X-ray light-curves")
+	axs[0].set(ylabel = "Counts / s", xlabel = "Time (s)")
+	axs[0].legend([softx_plot,hardx_plot], legend_text)
+	
+	ratio_err = [np.sqrt((h_errors[i]/s_energies[i])**2+(s_errors[i]*h_energies[i]/s_energies[i]**2)**2) for i in range(len(s_errors))]
+	axs[1].errorbar(s_times, count_ratio, fmt='k.', xerr=tbinerr, yerr=ratio_err, linewidth=0.5, markersize=1)
+	axs[1].plot(s_times, count_ratio, 'g-')
+	axs[1].axhline(y=1, color='k', linestyle='--', linewidth=0.8)
+	axs[1].set(ylabel = "$R_{hard}/R_{soft}$")
 	axs[1].set_title(" Hard / Soft ratio light curve")
 	axs[1].set(xlabel = "Time (s)")
-	if(rlog):
-		ratio_plot, = axs[1].plot(s_times, np.log10(count_ratio), 'g.')
-		axs[1].axhline(y=0, color='k', linestyle='--', linewidth=0.8)
-		axs[1].set(ylabel = "log10 $R_{hard}/R_{soft}$")
-	else:
-		ratio_err = [np.sqrt((h_errors[i]/s_energies[i])**2+(s_errors[i]*h_energies[i]/s_energies[i]**2)**2) for i in range(len(s_errors))]
-		print(ratio_err)
-		ratio_plot = axs[1].errorbar(s_times, count_ratio, fmt='g.', xerr=tbinerr, yerr=ratio_err)
-		axs[1].axhline(y=1, color='k', linestyle='--', linewidth=0.8)
-		axs[1].set(ylabel = "$R_{hard}/R_{soft}$")
+	ylim = max( np.abs(np.max(count_ratio)), np.abs(np.min(count_ratio)) )
+	if(rlog): axs[1].set_yscale('log')
+	else: axs[1].set_ylim(ymax= 1.1*ylim + 1, ymin= -1.1*ylim + 1)
 
-	if(plot_srange and plot_hrange):
-		fig.legend([softx_plot,hardx_plot] ,
-			[f"Soft X-rays ({softrange[0]}-{softrange[1]} keV)",
-			 f"Hard X-rays ({hardrange[0]}-{hardrange[1]} keV)"])
-	else:
-		fig.legend([softx_plot,hardx_plot],['Soft X-rays','Hard X-rays'])
+	# Increases spacing between the two subplots so that title and axis label don't overlap.
+	fig.subplots_adjust(hspace=0.45)
+	plt.show()
+
+	if(not extra): return
 	
-	plt.show()
-	plt.clf()
-
-	if(not extra):
-		return
 	# Plotting cumulative lightcurves
-	scumul = np.cumsum(s_energies)
-	hcumul = np.cumsum(h_energies)
-	plt.plot(s_times, scumul, 'b.', s_times, hcumul, 'r.', s_times, scumul/hcumul, 'g.')
-	plt.title(f" Cumulative counts plot across time")
-	plt.xlabel("Time (s)")
-	plt.ylabel("Cumulative rate (counts / s)")
-	plt.show()
-	plt.clf()
+	s_cumul = np.cumsum(s_energies)
+	h_cumul = np.cumsum(h_energies)
 
-	# Plotting subtracted lightcurve Hard - Soft
-	plt.plot(s_times, h_energies-s_energies, 'b.')
-	plt.title(f" Hard - Soft X-ray lightcurve")
-	plt.xlabel("Time (s)")
-	plt.ylabel("Counts / s")
+	fig, axs = plt.subplots(nrows=2, ncols=1)
+
+	softx_cplot, = axs[0].plot(s_times, s_cumul, 'b-')
+	hardx_cplot, = axs[0].plot(s_times, h_cumul, 'r-')
+	axs[0].set(xlabel="Time (s)", ylabel="Total counts")
+	axs[0].set_title("Cumulative hard and soft light-curves")
+	axs[0].legend([softx_cplot,hardx_cplot], legend_text)
+
+	axs[1].plot(s_times, h_cumul/s_cumul, 'g-')
+	axs[1].set_title("Cumulative light-curve ratio")
+	axs[1].set(xlabel="Time (s)", ylabel="$C_{hard}/C_{soft}$")
+
+	fig.subplots_adjust(hspace=0.45)
 	plt.show()
 
 	
