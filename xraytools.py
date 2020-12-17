@@ -12,7 +12,7 @@ import math
 	For analysing stellar data in the X-ray regime.
 	
 	Author: Jorge Fernandez, University of Warwick, Coventry, UK
-	Date: 16th December 2020
+	Date: 17th December 2020
 
 	Functions:
 		rotlaw
@@ -30,6 +30,9 @@ import math
 
 		cumlc
 			Plots a cumulative light curve
+
+		euv
+			Estimates the EUV flux based on the X-ray flux in a given range.
 
 """
 
@@ -487,6 +490,48 @@ def cumlc(lcfile=None, plotlc=True):
 
 
 
+def euv(fx=0, rmin=0, rmax=0, verbose = True):
+	"""
+	Applies a relation by King (2018) to convert X-ray range fluxes
+	to EUV fluxes.
+
+	Args:
+		fx: 	(float) X-ray flux (erg/cm2/s)
+		rmin:	(float) Lower bound of energy range in keV
+		rmax:	(float) Higher bound of energy range in keV
+		verbose:(bool) Prints extra information
+
+	Returns:
+		euv_ratio:	(float) Estimated EUV to X-ray flux ratio 
+		(-1):		(int) if input energy range is not included in the model
+	"""
+	euv_data = np.genfromtxt("king2018_euv.txt",
+								delimiter=';', names=True,
+								dtype=float, skip_header=2)
+
+	if(fx<=0):
+		print("[EUV] Error: X-ray flux must be greater than zero.")
+		return -1
+
+	which_range = -1
+	for i in range(len(euv_data['xrange_i'])):
+		if rmin == euv_data['xrange_i'][i] and rmax == euv_data['xrange_f'][i]:
+			which_range = i
+			break
+
+	if(which_range == -1):
+		print("[EUV] Error: input X-ray energy range not covered by model.")
+		return -1
+	
+	euv_ratio = euv_data['const'][i] * (fx ** euv_data['pwlaw'][i])
+	euv_flux = euv_ratio * fx
+
+	if verbose:
+		print(f"[EUV] Using energy ranges: EUV 0.0136 to {rmin:.3f}, and X-ray {rmin:.3f} to {rmax:.3f} keV")
+		print(f"[EUV] F_euv / F_x = {euv_ratio:.3e}")
+		print(f"[EUV] F_euv = {euv_flux:.3e} erg/cm2/s")
+
+	return euv_ratio
 
 
 

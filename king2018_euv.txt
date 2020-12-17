@@ -1,0 +1,8 @@
+# Relation by King et al 2018: https://ui.adsabs.harvard.edu/abs/2018MNRAS.478.1193K/abstract
+# X-ray range low energy in keV; X-ray range high energy in keV; constant in erg/cm^2/s; power-law index; EV lower range keV; EUV higher range keV; Comment by authors
+xrange_i;	xrange_f;	const;	pwlaw;	euv_i;	euv_f;	comment
+0.1;		2.4;		460;	-0.425;	0.0136;	0.1;	ROSAT PSPC
+0.124;		2.480;		650;	-0.450;	0.0136;	0.124;	Widely used
+0.150;		2.4;		880;	-0.467;	0.0136;	0.150;	XMM PN (lowest)
+0.2;		2.4;		1400;	-0.493;	0.0136;	0.2;	XMM PN (usual), XMM MOS, & Swift XRT
+0.243;		2.4;		2350;	-0.539;	0.0136;	0.243;	Chandra ACIS
