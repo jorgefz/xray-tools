@@ -4,5 +4,6 @@
 #Except these files
 !.gitignore
 !xraytools.py
+!README.md
 !jackson_model.txt
 !king2018_euv.txt
