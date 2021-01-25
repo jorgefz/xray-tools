@@ -1,3 +1,4 @@
+import matplotlib
 import matplotlib.pyplot as plt
 from astropy.io import fits
 import numpy as np
@@ -37,34 +38,56 @@ import math
 """
 
 
-def rotlaw(star_lratio=0, star_rossby=0, star_rot=0, vkcolor=None):
+
+def _rotlaw_rossby_number(vkcolor = 0, prot = 0):
+	"""
+	Estimates the Rossby number of a star given its V-K color index and its rotation period in days.
+	It returns the Rossby number and the turnover time in days.
+	The empirical relation comes from the Wright et al 2011 paper:
+		(https://ui.adsabs.harvard.edu/abs/2011ApJ...743...48W/abstract)
+	"""
+	rossby = 0
+	turnover_time = 0
+	if(3.5 >= vkcolor >= 1.1):
+		turnover_time = 10**(0.73 + 0.22*vkcolor)
+		rossby = prot / turnover_time
+	elif(6.6 >= vkcolor > 3.5):
+		turnover_time = 10**(-2.16 + 1.5*vkcolor - 0.13*vkcolor**2)
+		rossby = prot / turnover_time
+	return rossby, turnover_time
+
+
+
+def rotlaw(lumratio=0, rossby=0, prot=0, vkcolor=None, plot_dataset=True):
 	"""
 	This function plots a star's rotation period and X-ray luminosity
 	versus bolumetric luminosity ratio along with a model by Wright et al 2011
 	(https://ui.adsabs.harvard.edu/abs/2011ApJ...743...48W/abstract)
 
 	Args:
-		star_lratio:	(float) X-ray / bolumetric luminositiy ratio.
-		star_rot:   	(float) Star's rotation period in days.
-		star_rossby: 	(float) Star's Rossby number (rotation period / turnover time)
+		lumratio:	(float) X-ray / bolumetric luminositiy ratio.
+		prot:   	(float) Star's rotation period in days.
+		rossby: 	(float) Star's Rossby number (rotation period / turnover time)
 		vkcolor:     	(float) Star's V-Ks colour index.
+		plot_dataset:	(bool) Plot dataset from Wight et al 2011 alongside model fit.
 
 	The luminosity ratio is always required.
 	If the Rossby number is defined, the plot can be generated straight away.
 	Otherwise, you will need to input both the star's rotation period in days as well
 	as its V - Ks colour index.
+	Note: the X-ray luminosity is expectd to be in the ROSAT energy range (0.1 to 2.4 keV).
+	They used the PIMMS tool to convert all their fluxes to ROSAT.
 	"""
-
 	# Input checking
 	includes_rossby = True
 	# The luminosity ratio is always required
-	if(star_lratio <= 0):
+	if(lumratio <= 0):
 		print("[ROTLAW] Error: Lx/Lbol is invalid or undefined.")
 		return
 	# Decide to use either Rossby number or estimate it.
-	if(star_rossby <= 0):
+	if(rossby <= 0):
 		includes_rossby = False
-		if(star_rot <= 0 or vkcolor is None):
+		if(prot <= 0 or vkcolor is None):
 			print( ("[ROTLAW] Error: undefined parameters.\n"
 				"Either Rossby number or both rotation period and V-Ks color required.") )
 			return
@@ -73,17 +96,9 @@ def rotlaw(star_lratio=0, star_rossby=0, star_rot=0, vkcolor=None):
 
 	# Estimating turnover time and Rossby number, if undefined
 	if(includes_rossby == False):
-		turnover_time = 0
-		# Check if colour is within valid range
-		if(vkcolor < 1.1 or vkcolor > 6.6):
-			print("[ROTLAW] Warning: V-Ks colour index outside valid range (1.1, 6.6)")
-		if(vkcolor < 3.5):
-			turnover_time = 10**(0.73 + 0.22*vkcolor) #days
-			star_rossby = star_rot / turnover_time
-		else:
-			turnover_time = 10**(-2.16 + 1.5*vkcolor - 0.13*vkcolor**2)
+		rossby, turnover_time = _rotlaw_rossby_number(vkcolor, prot)
 		print(f" Estimated turnover time: {turnover_time:.3f} days")
-		print(f" Estimated Rossby number: {star_rossby:.3f}")
+		print(f" Estimated Rossby number: {rossby:.3f}")
 
 	# Model parameters
 	powerlaw = -2.7
@@ -110,40 +125,58 @@ def rotlaw(star_lratio=0, star_rossby=0, star_rot=0, vkcolor=None):
 	model_uerr = np.array([const_uerr*r**(powerlaw+pwl_err) if r>ro_sat_uerr else rx_sat_uerr for r in ross])
 	model_lerr = np.array([const_lerr*r**(powerlaw-pwl_err) if r>ro_sat_lerr else rx_sat_lerr for r in ross])
 
-	#Plotting model & star
-	plt.plot(ross, model, 'b-')
-	plt.plot(ross, model_uerr, 'b--', ross, model_lerr, 'b--')
-	plt.plot(star_rossby, star_lratio, 'r*')
+	fig = plt.figure()
+	ax = fig.add_subplot(1,1,1)
+	ax.set_xscale('log')
+	# Format the X axis to be in log scale but keeping the original values (e.g. 0.01, 0.1, 1, 10, etc)
+	ax.xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter("%g"))
+
+	# Plotting Wright dataset
+	dataset_filename = "wright_dataset.txt"
+	if(plot_dataset and os.path.isfile(dataset_filename)):
+		dataset = np.genfromtxt(dataset_filename, delimiter='|', filling_values=None, autostrip=True, names=True, deletechars='')
+		dataset_rossby = [_rotlaw_rossby_number(dataset['V-K'][i], dataset['Prot'][i])[0] for i in range(len(dataset['Prot']))]
+		dataset_rx = [10**d for d in dataset['Lx/bol']]
+		plt.plot(dataset_rossby, dataset_rx, color='0.5', marker='.', markersize=1.5, linestyle='None')
+		#Plot the Sun as a black cross
+		#plt.plot(dataset_rossby[0], dataset_rx[0], color='black', marker='+', markersize=7.5)
+
+	# Plotting model
+	plt.plot(ross, model, 'b-', linewidth=1.2)
+	plt.plot(ross, model_uerr, 'b--', linewidth=1.2)
+	plt.plot(ross, model_lerr, 'b--', linewidth=1.2)
 	plt.xlabel("Rossby number")
 	plt.title("Rotation Law by Wright et al (2011)\n$R_x = (%.2E) Ro^{%.2f\\pm %.2f}$" % (const, powerlaw, pwl_err) )
+
+	# Plot our star
+	plt.plot(rossby, lumratio, 'r*')
 
 	# Plot decorations
 	plt.ylabel("$L_x / L_{bol}$")
 	plt.yscale("log")
-	plt.xscale("log")
 	plt.show()
-	plt.clf()
 
 
 
-
-
-def agerel(star_lum=None, star_color=None, star_age=None):
+def agerel(lumratio=None, bvcolor=None, age_myr=None, plot_dataset=True):
 	"""
 	This function plots a star's colour index (B-V) and age
 	along with an age relation by Jackson et al (2012):
 	https://arxiv.org/abs/1111.0031
 
 	Args:
-		star_lum:	(float) X-ray / bolometric luminosity ratio of the star.
-		star_color:	(float) Star's B-V colour index.
-		star_age:	(float) Star's age in log10(Myr).
+		lumratio:    	(float) X-ray / bolometric luminosity ratio of the star.
+		bvcolor:     	(float) Star's B-V colour index.
+		age_myr:      	(float) Star's age in Myr.
+		plot_dataser:	(bool) Plots dataset of stars from the paper alongside your star.
 
 	Both parameters are required, as well as the predefined model parameters
 	in the file 'jackson_model.txt'.
+	Note: the X-ray luminosity is expectd to be in the ROSAT energy range (0.1 to 2.4 keV).
+	They used the PIMMS tool to convert all their fluxes to ROSAT.
 	"""
 
-	if(star_lum is None or star_color is None or star_age is None):
+	if(lumratio is None or bvcolor is None or age_myr is None):
 		print("[AGEREL] Error: Star colour index or age undefined.")
 		return
 	if(not os.path.isfile("jackson_model.txt")):
@@ -167,7 +200,7 @@ def agerel(star_lum=None, star_color=None, star_age=None):
 	# Find which colour index boundary the star applies to.
 	ind = -1
 	for i,m in enumerate(model_data):
-		if(star_color >= m['icolor'] and star_color < m['fcolor']):
+		if(m['icolor'] < bvcolor < m['fcolor']):
 			ind = i
 			break
 	if(ind < 0):
@@ -179,15 +212,21 @@ def agerel(star_lum=None, star_color=None, star_age=None):
 	# Fit and plot
 	satlum = 10**model_data['satlum'][ind]
 	satage = 10**model_data['satage'][ind]
-	# It only looks like the plots in the paper by doubling the pw index! Why??
 	powerlaw = model_data['powerlaw'][ind]
 
 	ages = np.linspace(10**6.5, 10**10, 1000)
 	const = satlum / (satage**(-powerlaw))
 	model = np.array([const*a**(-powerlaw) if a>satage else satlum for a in ages])
 
+	dataset_filename = "jackson_dataset.txt"
+	if(plot_dataset and os.path.isfile(dataset_filename)):
+		dataset = np.genfromtxt(dataset_filename, delimiter='|', filling_values=None, autostrip=True, names=True, deletechars='', dtype=None, encoding=None)
+		dataset_age = [d for i,d in enumerate(dataset['log(Age)']) if model_data['icolor'][ind] <= dataset['(B-V)0'][i] <= model_data['fcolor'][ind]]
+		dataset_rx = [d for i,d in enumerate(dataset['log(Lx/Lb)']) if model_data['icolor'][ind] <= dataset['(B-V)0'][i] <= model_data['fcolor'][ind]]
+		plt.plot(dataset_age, dataset_rx, color='0.5', marker='.', markersize=2.5, linestyle='None')
+
 	plt.plot(np.log10(ages), np.log10(model), 'b-')
-	plt.plot(star_age+6, np.log10(star_lum), 'r*')
+	plt.plot(math.log10(age_myr)+6, np.log10(lumratio), 'r*', markersize = 7.5)
 
 	plt.xlabel("Age log10(yr)")
 	plt.ylabel("$log10(L_x / L_{bol})$")
@@ -196,8 +235,49 @@ def agerel(star_lum=None, star_color=None, star_age=None):
 	plt.clf()
 
 
-	
+def test_study_hyades():
+	"""
+	Studying Hyades dataset and K2-135.
+	Function for analytical plots.
+	"""
+	dataset_filename = "jackson_dataset.txt"
+	if(not os.path.isfile(dataset_filename)):
+		print(" Error: missing dataset file")
+		return
+	dataset = np.genfromtxt(dataset_filename, delimiter='|', filling_values=None, autostrip=True, names=True, deletechars='', dtype=None, encoding=None)
+	hyades_lx = [d for i,d in enumerate(dataset['log(Lx/Lb)']) if dataset['Cluster'][i].replace(' ', '') == 'Hyades']
+	hyades_bv = [d for i,d in enumerate(dataset['(B-V)0']) if dataset['Cluster'][i].replace(' ', '') == 'Hyades']
 
+	model_filename = "jackson_model.txt"
+	if(not os.path.isfile(model_filename)):
+		print(" Error: missing model file")
+		return
+	model_data = np.genfromtxt(model_filename,
+						delimiter=';', names=True,
+						dtype=float, skip_header=1)
+
+	# ======== PLOTTING LX VS B-V ==========
+	# Choosing marker colour based on cluster
+	marker_colors = []
+	allowed_colors = ['k', 'y', 'm', 'c', 'r', 'g', 'b', '0.5']
+	for c in hyades_bv:
+		which_color_range = -1
+		for i in range(len(model_data['icolor'])):
+			if(model_data['icolor'][i] <= c <= model_data['fcolor'][i]):
+				which_color_range = i
+				break
+		marker_colors.append(allowed_colors[which_color_range])
+
+	for i in range(len(hyades_lx)):
+		plt.plot(hyades_bv[i], hyades_lx[i], color=marker_colors[i], marker='.')
+	plt.plot(12.48-11.2, math.log10(1.8E-5), marker='*', color=marker_colors[6], markersize=7.5)
+	plt.title("Hyades cluster (B-V) colour and Lx/Lbol")
+	plt.xlabel("log10(B-V)")
+	plt.ylabel("log10(Lx/Lbol)")
+	plt.show()
+
+	# ======== PLOTTING AGEREL BUT B-V COLOR RANGE BELOW ==========
+	agerel(1.8E-5, 12.48-11.2-0.1, 625)
 
 
 def xraydiv(file=None, rmf=None, erange=None, verbose=True):
@@ -490,28 +570,31 @@ def cumlc(lcfile=None, plotlc=True):
 
 
 
-def euv(fx=0, rmin=0, rmax=0, verbose = True):
+def euv(fx=0, rmin=0, rmax=0, verbose = True, calc_rosat=True):
 	"""
 	Applies a relation by King (2018) to convert X-ray range fluxes
 	to EUV fluxes.
 
 	Args:
-		fx: 	(float) X-ray flux (erg/cm2/s)
+		fx: 	(float) X-ray flux at the surface of the star (erg/cm2/s)
 		rmin:	(float) Lower bound of energy range in keV
 		rmax:	(float) Higher bound of energy range in keV
 		verbose:(bool) Prints extra information
 
 	Returns:
 		euv_ratio:	(float) Estimated EUV to X-ray flux ratio 
-		(-1):		(int) if input energy range is not included in the model
+		(-1):		(int) if input energy range is not covered by the model, or other error occurs.
 	"""
 	euv_data = np.genfromtxt("king2018_euv.txt",
 								delimiter=';', names=True,
 								dtype=float, skip_header=2)
 
-	if(fx<=0):
+	if(fx <= 0):
 		print("[EUV] Error: X-ray flux must be greater than zero.")
 		return -1
+
+	if( fx < 10):
+		print("[EUV] Warning: the flux is quite low. Are your sure you're using the surface X-ray flux in erg/s/cm^2 ?")
 
 	which_range = -1
 	for i in range(len(euv_data['xrange_i'])):
@@ -528,8 +611,20 @@ def euv(fx=0, rmin=0, rmax=0, verbose = True):
 
 	if verbose:
 		print(f"[EUV] Using energy ranges: EUV 0.0136 to {rmin:.3f}, and X-ray {rmin:.3f} to {rmax:.3f} keV")
-		print(f"[EUV] F_euv / F_x = {euv_ratio:.3e}")
-		print(f"[EUV] F_euv = {euv_flux:.3e} erg/cm2/s")
+		print(f"[EUV] F_EUV / F_x = {euv_ratio:.3e}")
+		print(f"[EUV] F_EUV = {euv_flux:.3e} erg/cm2/s")
+		print(f"[EUV] F_XUV = {(euv_flux+fx):.3e} erg/cm2/s")
+
+	# Calculating ROSAT X-ray flux
+	if(calc_rosat):
+		from scipy.optimize import fsolve
+		r_ind = 0
+		func = lambda fx_rosat : fx_rosat + euv_data['const'][r_ind]*fx_rosat**(euv_data['pwlaw'][r_ind]+1) - (euv_flux+fx)
+		guess = 2*fx
+		solution, = fsolve(func, guess)
+		print(f"[EUV] Estimated ROSAT X-ray flux: {solution:.3e} erg/cm2/s")
+		rosat_xuv = euv(solution, 0.1, 2.4, False, False)*solution + solution
+		print(f"[EUV] Accuracy of {abs(rosat_xuv - (euv_flux+fx)):.3e} to expected XUV flux.")
 
 	return euv_ratio
 
