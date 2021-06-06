@@ -19,22 +19,21 @@ class Resources:
 	path_hyades_tic    = PyDir+"\\resources\\"+"hyades_freund_tic.txt"
 
 	def print_paths():
-		print(path_boltable)
-		print(path_boltable)
-		print(path_wright_dset)
-		print(path_jackson_dset)
-		print(path_jackson_model)
-		print(path_king_euv)
-		print(path_fip_laming)
-		print(path_hyades_dset)
-		print(path_hyades_freund)
-		print(path_hyades_tic)
+		print(Resources.path_boltable)
+		print(Resources.path_wright_dset)
+		print(Resources.path_jackson_dset)
+		print(Resources.path_jackson_model)
+		print(Resources.path_king_euv)
+		print(Resources.path_fip_laming)
+		print(Resources.path_hyades_dset)
+		print(Resources.path_hyades_freund)
+		print(Resources.path_hyades_tic)
 
 	def boltable():
 		"""
 		Boltable: mamajek et al?
 		"""
-		dataset = np.genfromtxt(path_boltable, delimiter=',',
+		dataset = np.genfromtxt(Resources.path_boltable, delimiter=',',
 			filling_values=None, autostrip=True, names=True,
 			deletechars='', dtype=None, encoding=None)
 		return dataset
@@ -43,7 +42,7 @@ class Resources:
 		"""
 		Paper: Wright et al (2011)
 		"""
-		dataset = np.genfromtxt(path_wright_dset, delimiter='|',
+		dataset = np.genfromtxt(Resources.path_wright_dset, delimiter='|',
 			filling_values=None, autostrip=True, names=True,
 			deletechars='', dtype=None, encoding=None)
 		return dataset
@@ -52,7 +51,7 @@ class Resources:
 		"""
 		Paper: Jackson et al (2012)
 		"""
-		dataset = np.genfromtxt(path_jackson_dset, delimiter='|',
+		dataset = np.genfromtxt(Resources.path_jackson_dset, delimiter='|',
 			filling_values=None, autostrip=True, names=True,
 			deletechars='', dtype=None, encoding=None)
 		return dataset
@@ -69,25 +68,25 @@ class Resources:
 			powerlaw: power law index
 			errpowerlaw: error in the power law index 
 		"""
-		model_data = np.genfromtxt(path_jackson_model,
+		model_data = np.genfromtxt(Resources.path_jackson_model,
 					delimiter=';', names=True,
 					dtype=float, skip_header=1)
 		return model_data
 
 	def king_euv():
-		euv_data = np.genfromtxt(path_king_euv,
+		euv_data = np.genfromtxt(Resources.path_king_euv,
 				delimiter=';', names=True,
 				dtype=float, skip_header=2)
 		return euv_data
 
 	def fip_laming():
-		dataset = np.genfromtxt(path_fip_laming,
+		dataset = np.genfromtxt(Resources.path_fip_laming,
 				delimiter=',', names=True,
 				dtype=float, skip_header=1)
 		return dataset
 
 	def hyades_dset():
-		return np.load(path_hyades_dset, allow_pickle=True)
+		return np.load(Resources.path_hyades_dset, allow_pickle=True)
 
 	def hyades_freund():
 		pass

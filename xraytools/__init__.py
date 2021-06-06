@@ -1,7 +1,7 @@
-#__all__ = ["xraytools", "utils", "resources", "boltable", "sas"]
 """
-from .utils import Utils
-from .resources import Resources
-from .boltable import Boltable
-from .sas import Sas
+Array of scripts and procedures to analyse X-ray data.
+
+from xraytools.utils import Utils
+from xraytools.resources import Resources
+from xraytools. import Utils
 """
