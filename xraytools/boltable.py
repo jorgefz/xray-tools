@@ -12,23 +12,23 @@ class Boltable:
 	interp_funcs = dict()
 
 	def fields():
-		return _fields
+		return Boltable._fields
 
 	def spt(field, value):
 		"""
 		Retrieves nearest spectral types of a star
 		"""
-		data_field = _dset[field]
+		data_field = Boltable._dset[field]
 		try: idx = np.nanargmin( np.abs(data_field - value) )
 		except ValueError: return None
-		return _dset['SpT'][idx]
+		return Boltable._dset['SpT'][idx]
 
 	def interpolate(using_field, using_value):
 		"""
 		From a field and a value, returns a row with all data in boltable
 		It doesn't work with spectral types
 		"""
-		data_field = _dset[using_field]
+		data_field = Boltable._dset[using_field]
 		row = dict()
 		row[using_field] = using_value
 		row['SpT'] = spt(using_field, using_value)

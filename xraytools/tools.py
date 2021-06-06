@@ -42,10 +42,7 @@ from xraytools.resources import Resources
 """
 
 
-PyDir = os.path.dirname(os.path.realpath(sys.argv[0]))
-
-	
-
+PyDir = os.path.dirname(os.path.realpath(__file__))
 
 def specplot(spectrum, rmf=None):
 	"""

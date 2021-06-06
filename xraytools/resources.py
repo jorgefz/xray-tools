@@ -8,15 +8,15 @@ class Resources:
 
 	PyDir = os.path.dirname(os.path.realpath(__file__))
 
-	path_boltable      = PyDir+"\\resources\\"+"bolometric_corrections.csv"
-	path_wright_dset   = PyDir+"\\resources\\"+"wright_dataset.txt"
-	path_jackson_dset  = PyDir+"\\resources\\"+"jackson_dataset.txt"
-	path_jackson_model = PyDir+"\\resources\\"+"jackson_model.txt"
-	path_king_euv      = PyDir+"\\resources\\"+"king2018_euv.txt"
-	path_fip_laming    = PyDir+"\\resources\\"+"fip_laming.txt"
-	path_hyades_dset   = PyDir+"\\resources\\"+"hyades_dataset.npy"
-	path_hyades_freund = PyDir+"\\resources\\"+"hyades_freund_full.txt"
-	path_hyades_tic    = PyDir+"\\resources\\"+"hyades_freund_tic.txt"
+	path_boltable      = os.path.normpath(os.path.join(PyDir,"resources","bolometric_corrections.csv").replace('\\','/'))
+	path_wright_dset   = PyDir+"/resources/"+"wright_dataset.txt"
+	path_jackson_dset  = PyDir+"/resources/"+"jackson_dataset.txt"
+	path_jackson_model = PyDir+"/resources/"+"jackson_model.txt"
+	path_king_euv      = PyDir+"/resources/"+"king2018_euv.txt"
+	path_fip_laming    = PyDir+"/resources/"+"fip_laming.txt"
+	path_hyades_dset   = os.path.normpath(os.path.join(PyDir,"resources","hyades_dataset.npy").replace('\\','/'))
+	path_hyades_freund = PyDir+"/resources/"+"hyades_freund_full.txt"
+	path_hyades_tic    = PyDir+"/resources/"+"hyades_freund_tic.txt"
 
 	def print_paths():
 		print(Resources.path_boltable)
