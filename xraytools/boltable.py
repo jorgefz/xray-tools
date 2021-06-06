@@ -2,10 +2,8 @@
 #from astropy.io import fits
 import numpy as np
 import os
-
-from .resources import Resources
 from scipy.interpolate import interp1d
-
+from xraytools.resources import Resources
 
 class Boltable:
 

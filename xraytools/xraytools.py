@@ -8,8 +8,8 @@ import sys
 import math
 from numpy.lib.recfunctions import append_fields
 
-from .utils import Utils
-from .resources import Resources
+from xraytools.utils import Utils
+from xraytools.resources import Resources
 
 """
 	----- X-ray Tools -----

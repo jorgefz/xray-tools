@@ -7,7 +7,7 @@ import os
 import math
 import subprocess as sp
 
-from .utils import Utils
+from xraytools.utils import Utils
 
 
 class Sas:
