@@ -9,7 +9,6 @@ import subprocess as sp
 
 from xraytools.utils import Utils
 
-
 class Sas:
 	"""
 	Calls SAS functions in a pythonian way.
