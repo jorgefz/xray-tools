@@ -27,6 +27,8 @@ import math
 
 """
 
+from xraytools.resources import Resources
+
 class Utils:
 
 	def indexable(obj):
@@ -51,6 +53,9 @@ class Utils:
 		Input:
 			vkcolor:	V-K color index
 			prot:		Rotation period in days
+		Returns:
+			[0]: rossby number
+			[1]: turnover time (days)
 		"""
 		rossby = 0
 		turnover_time = 0
@@ -162,3 +167,72 @@ class Utils:
 		it calculates and returns the uncertainty of z.
 		"""
 		return np.abs(2*y/(x+y)**2) * np.sqrt(xerr**2+yerr**2)
+
+
+	def euv(lx=0, radius=0, rmin=0, rmax=0, lx_err = 0, radius_err =0, verbose = True, calc_rosat=True):
+		"""
+		Applies a relation by King (2018) to convert X-ray range fluxes
+		to EUV fluxes.
+
+		Args:
+			lx: 	(float) X-ray luminosity of the star (erg/s)
+			radius: (float) Radius of the star in solar radii.
+			rmin:	(float) Lower bound of energy range in keV
+			rmax:	(float) Higher bound of energy range in keV
+			lx_err: (float) Uncertainty of the X-ray luminosity
+			radius_err (float) Uncertainty of the stellar radius.
+			verbose:(bool) Prints extra information
+
+		Returns:
+			euv_lum:	(float) Estimated EUV luminosity from 0.0136 keV to the minimum input energy range. 
+			(-1):		(int) if input energy range is not covered by the model, or other error occurs.
+		"""
+		euv_data = Resources.king_euv()
+
+		if(lx <= 0 or radius <= 0):
+			print("[EUV] Error: X-ray luminosity and radius must be greater than zero.")
+			return -1
+		fx = lx / (4 * math.pi * (6.957e10 * radius )**2 ) #radius converted to cm2
+		fx_err = math.sqrt( ( lx_err/(4*math.pi*(6.957e10*radius)**2 ))**2 + ( radius_err*lx/(4*math.pi*(6.957e10**2)*(radius)**3) )**2 )
+		
+		if( fx < 10):
+			print("[EUV] Warning: the flux is quite low. Are your sure you're using the surface X-ray flux in erg/s/cm^2 ?")
+
+		which_range = -1
+		for i in range(len(euv_data['xrange_i'])):
+			if rmin == euv_data['xrange_i'][i] and rmax == euv_data['xrange_f'][i]:
+				which_range = i
+				break
+
+		if(which_range == -1):
+			print("[EUV] Error: input X-ray energy range not covered by model.")
+			return -1
+		
+		euv_ratio = euv_data['const'][i] * (fx ** euv_data['pwlaw'][i])
+		euv_ratio_err = fx_err * euv_data['const'][i] * euv_data['pwlaw'][i] * fx ** (euv_data['pwlaw'][i] - 1)
+		
+		euv_flux = euv_ratio * fx
+		euv_flux_err = math.sqrt( (euv_ratio_err * fx)**2 + (fx_err * euv_ratio)**2 )
+		
+		euv_lum = euv_flux * 4 * math.pi * (6.957e10 * radius )**2
+		euv_lum_err = math.sqrt( (euv_flux_err*4*math.pi*(6.957e10*radius)**2)**2 + (radius_err*euv_flux*8*math.pi*radius*(6.957e10)**2)**2 )
+
+		if verbose:
+			print(f"[EUV] Using energy ranges: EUV 0.0136 to {rmin:.3f}, and X-ray {rmin:.3f} to {rmax:.3f} keV")
+			print(f"[EUV] F_EUV / F_x = {euv_ratio:.3e} +/- {euv_ratio_err:.3e}")
+			print(f"[EUV] L_EUV = {euv_lum:.3e} +/- {euv_lum_err:.3e} erg/s")
+			print(f"[EUV] L_XUV = {(euv_lum+lx):.3e} +/- {(math.sqrt((euv_lum_err)**2+(lx_err)**2)):.3e} erg/s")
+
+		# Calculating ROSAT X-ray flux
+		if(calc_rosat):
+			from scipy.optimize import fsolve
+			r_ind = 0
+			func = lambda fx_rosat : fx_rosat + euv_data['const'][r_ind]*fx_rosat**(euv_data['pwlaw'][r_ind]+1) - (euv_flux+fx)
+			guess = 2*fx
+			solution, = fsolve(func, guess)
+			rosat_lum = solution * 4 * math.pi * (6.957e10 * radius )**2
+			print(f"[EUV] Estimated ROSAT X-ray flux: {rosat_lum:.3e} erg/s")
+			rosat_xuv = Utils.euv(rosat_lum, radius, 0.1, 2.4, verbose=False, calc_rosat=False) + rosat_lum
+			#print(f"[EUV] Residual {(abs(rosat_xuv - (euv_lum+lx))):.3e} to expected XUV flux.")
+
+		return euv_lum
