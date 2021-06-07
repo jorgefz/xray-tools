@@ -35,12 +35,9 @@ class Utils:
 		"""
 		Returns true if an input object is subscriptable or idnexable (e.g. if obj[0] or len(obj) works)
 		"""
-		try:
-			_ = obj[:]
-		except TypeError:
-			return False
-		else:
-			return True
+		try:              _ = obj[:]
+		except TypeError: return False
+		else:             return True
 
 
 	def rossby_number(vkcolor = 0, prot = 0):
