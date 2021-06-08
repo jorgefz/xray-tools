@@ -56,11 +56,38 @@ def specplot(spectrum, rmf=None):
 	"""
 	pass
 
-def lcplot(lc):
+def lcplot(lcfile):
 	"""
-	Plots input light-curve
+        Plots an input light curve.
+
+	Args:
+		lcfile: 	(string) fits file with lightcurve data
+
 	"""
-	pass
+	if(not lcfile):
+		print(" Error: no lightcurve filename provided")
+		return
+
+	if not os.path.exists(lcfile):
+		print(f" Error: file '{lcfile}' not found.")
+		return
+
+	lc_data = None
+	with fits.open(lcfile) as image:
+		lc_data = np.copy(image['RATE'].data)
+
+	times_raw = np.nan_to_num(lc_data['TIME'], 0)
+	times = (times_raw - times_raw[0]) / 1000.0 # Normalize to kiloseconds
+	energies = np.nan_to_num(lc_data['RATE'], 0)
+	energy_err = np.nan_to_num(lc_data['ERROR'], 0)
+
+	# Plotting normal lightcurve
+        plt.plot(times, energies)
+        plt.title(f" Counts plot across time \n {lcfile}")
+        plt.xlabel("Time (ks)")
+        plt.ylabel("Counts / s")
+        plt.show()
+        plt.clf()
 
 
 def rotation_tracks(age_myr=700, lum_x=1.8E28, colors='red'):
@@ -72,15 +99,10 @@ def rotation_tracks(age_myr=700, lum_x=1.8E28, colors='red'):
 		colors:		colors in which to plot the data points (optional)
 	"""
 	# Making sure input data is a list
-	if not Utils.indexable(age_myr):
-		age_myr = [age_myr]
+	if not Utils.indexable(age_myr): age_myr = [age_myr]
+	if not Utils.indexable(lum_x): lum_x = [lum_x]
 
-	if not Utils.indexable(lum_x):
-		lum_x = [lum_x]
-
-	if isinstance(colors, str):
-		colors = [colors]*len(age_myr)
-
+	if isinstance(colors, str): colors = [colors]*len(age_myr)
 
 	ages = np.linspace(start=1, stop=4600, num=1000) # ages in Myr
 
@@ -91,7 +113,7 @@ def rotation_tracks(age_myr=700, lum_x=1.8E28, colors='red'):
 
 	lx_10th = [ 2.0E31 * t**(-1.12) if t>t_sat[0] else lx_sat for t in ages]
 	lx_50th = [ 2.6E32 * t**(-1.42) if t>t_sat[1] else lx_sat for t in ages]
-	lx_90th = [ 2.3E36 * t**(-2.5) if t>t_sat[2] else lx_sat for t in ages]
+	lx_90th = [ 2.3E36 * t**(-2.5)  if t>t_sat[2] else lx_sat for t in ages]
 
 	# Plotting Lx vs Age
 	plt.plot(ages, lx_10th, color='red')
